@@ -37,166 +37,180 @@
 #include <dms.h>
 
 struct download_buffer {
-  void*   buf;
-  size_t  len;
+   void*   buf;
+   size_t  len;
 };
 
 struct upload_buffer {
-	const void*  buf;
-	size_t		   len;
-	size_t		   pos;
+   const void*  buf;
+   size_t		   len;
+   size_t		   pos;
 };
 
 static size_t download_data_cb(const void* ptr, size_t size, size_t nmemb, void* user_data) {
 
-	struct download_buffer* db = (struct download_buffer*) user_data;
-	size_t len = size * nmemb;
-	size_t oldlen;
-  size_t newlen;
-	void* newmem;
-	static const unsigned char zero = 0;
+   struct download_buffer* db = (struct download_buffer*) user_data;
+   size_t len = size * nmemb;
+   size_t oldlen;
+   size_t newlen;
+   void* newmem;
+   static const unsigned char zero = 0;
 
-	oldlen = db->len;
-	newlen = oldlen + len;
+   oldlen = db->len;
+   newlen = oldlen + len;
 
-	newmem = realloc(db->buf, newlen + 1);
-	if (!newmem)
-		return 0;
+   newmem = realloc(db->buf, newlen + 1);
+   if (!newmem)
+      return 0;
 
-	db->buf = newmem;
-	db->len = newlen;
-	memcpy((unsigned char*) db->buf + oldlen, ptr, len);
-	memcpy((unsigned char*) db->buf + newlen, &zero, 1);	/* null terminate */
+   db->buf = newmem;
+   db->len = newlen;
+   memcpy((unsigned char*) db->buf + oldlen, ptr, len);
+   memcpy((unsigned char*) db->buf + newlen, &zero, 1);	/* null terminate */
 
-	return len;
+   return len;
 }
 
-static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb, 
-			     void *user_data) {
+static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb, void *user_data) {
 
-	struct upload_buffer *ub = (struct upload_buffer *) user_data;
-	size_t len = size * nmemb;
+   struct upload_buffer *ub = (struct upload_buffer *) user_data;
+   size_t len = size * nmemb;
 
-	if (len > ub->len - ub->pos)
-		len = ub->len - ub->pos;
+   if (len > ub->len - ub->pos)
+      len = ub->len - ub->pos;
 
-	if (len) {
-		memcpy(ptr, ((unsigned char*)ub->buf) + ub->pos, len);
-		ub->pos += len;
-	}
+   if (len) {
+      memcpy(ptr, ((unsigned char*)ub->buf) + ub->pos, len);
+      ub->pos += len;
+   }
 
-	return len;
+   return len;
 }
 
 static int seek_data_cb(void *user_data, curl_off_t offset, int origin) {
 
-	struct upload_buffer *ub = (struct upload_buffer *) user_data;
-	
-	switch (origin) {
-	case SEEK_SET:
-		ub->pos = (size_t) offset;
-		break;
-	case SEEK_CUR:
-		ub->pos += (size_t) offset;
-		break;
-	case SEEK_END:
-		ub->pos = ub->len + (size_t) offset;
-		break;
-	default:
-		return 1; /* CURL_SEEKFUNC_FAIL */
-	}
+   struct upload_buffer *ub = (struct upload_buffer *) user_data;
 
-	return 0; /* CURL_SEEKFUNC_OK */
+   switch (origin) {
+   case SEEK_SET:
+      ub->pos = (size_t) offset;
+      break;
+   case SEEK_CUR:
+      ub->pos += (size_t) offset;
+      break;
+   case SEEK_END:
+      ub->pos = ub->len + (size_t) offset;
+      break;
+   default:
+      return 1; /* CURL_SEEKFUNC_FAIL */
+   }
+
+   return 0; /* CURL_SEEKFUNC_OK */
 }
 
 json_t* dms_create(CURL* curl, const char* pass, const char* req) {
 
-  char hdr_len[64];
-  struct download_buffer download_data = { 0 };
-  struct upload_buffer upload_data;
-  struct curl_slist* headers = NULL;
-  json_t* val = NULL;
-  json_error_t json_err;
-  char* res_buf;
-  char curl_err_str[CURL_ERROR_SIZE] = { 0 };
-  long http_status;
-  int rc = 0;
+   char hdr_len[64];
+   struct download_buffer download_data = { 0 };
+   struct upload_buffer upload_data;
+   struct curl_slist* headers = NULL;
+   json_t* val = NULL;
+   json_error_t json_err;
+   char* res_buf;
+   char curl_err_str[CURL_ERROR_SIZE] = { 0 };
+   long http_status;
+   int rc = 0;
 
-  curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1);
-  curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, download_data_cb);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &download_data);
-  curl_easy_setopt(curl, CURLOPT_READFUNCTION, upload_data_cb);
-  curl_easy_setopt(curl, CURLOPT_READDATA, &upload_data);
-  curl_easy_setopt(curl, CURLOPT_SEEKFUNCTION, seek_data_cb);
-  curl_easy_setopt(curl, CURLOPT_SEEKDATA, &upload_data);
-  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30);
-  curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
-  
-  if (pass) {
-    curl_easy_setopt(curl, CURLOPT_USERPWD, pass);
-		curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-  }
+   curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1);
+   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, download_data_cb);
+   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &download_data);
+   curl_easy_setopt(curl, CURLOPT_READFUNCTION, upload_data_cb);
+   curl_easy_setopt(curl, CURLOPT_READDATA, &upload_data);
+   curl_easy_setopt(curl, CURLOPT_SEEKFUNCTION, seek_data_cb);
+   curl_easy_setopt(curl, CURLOPT_SEEKDATA, &upload_data);
+   curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30);
+   curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 
-  curl_easy_setopt(curl, CURLOPT_POST, 1);
-  curl_easy_setopt(curl, CURLOPT_URL, DMS_API_URL);
+   if (pass) {
+      curl_easy_setopt(curl, CURLOPT_USERPWD, pass);
+      curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+   }
 
-  upload_data.buf = req;
-  upload_data.len = strlen(req);
-  upload_data.pos = 0;
+   curl_easy_setopt(curl, CURLOPT_POST, 1);
+   curl_easy_setopt(curl, CURLOPT_URL, DMS_API_URL);
 
-  sprintf(hdr_len, "Content-Length: %lu", (unsigned long) upload_data.len);
+   upload_data.buf = req;
+   upload_data.len = strlen(req);
+   upload_data.pos = 0;
 
-  headers = curl_slist_append(headers, "Content-Type: application/json");
-  headers = curl_slist_append(headers, hdr_len);
-  headers = curl_slist_append(headers, "User-Agent: dms");
+   snprintf(hdr_len, 64, "Content-Length: %lu", (unsigned long) upload_data.len);
 
-  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+   headers = curl_slist_append(headers, "Content-Type: application/json");
+   headers = curl_slist_append(headers, hdr_len);
+   headers = curl_slist_append(headers, "User-Agent: dms");
 
-  rc = curl_easy_perform(curl);
-  if (rc) {
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status);
-    if (http_status == 404) {
-      fprintf(stderr, "HTTP request failed: %s\n", curl_err_str);
-    }
-  }
+   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-  if (!download_data.buf) { 
+   rc = curl_easy_perform(curl);
+   if (rc) {
+      curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status);
+      if (http_status == 404) {
+         fprintf(stderr, "HTTP request failed: %s\n", curl_err_str);
+      }
+   }
+
+   if (!download_data.buf) { 
     fprintf(stderr, "No data received from DMS\n");
-  }
+   }
 
-  val = json_loads(download_data.buf, 0, &json_err);
+   val = json_loads(download_data.buf, 0, &json_err);
 
-  curl_slist_free_all(headers);
+   curl_slist_free_all(headers);
 
-  return val;
+   return val;
 }
 
 int dms_check_in(CURL* curl, const char* token) {
 
-  char check_in_url[256];
+   char check_in_url[256];
 
-  sprintf(check_in_url, "https://nosnch.in/%s", token);
-  curl_easy_setopt(curl, CURLOPT_URL, check_in_url);
+   snprintf(check_in_url, 256, "https://nosnch.in/%s", token);
+   curl_easy_setopt(curl, CURLOPT_URL, check_in_url);
 
-  return curl_easy_perform(curl);
+   return curl_easy_perform(curl);
 }
 
 int dms_delete(CURL* curl, const char* pass, const char* token) {
-  
-  struct curl_slist* headers = NULL;
-  int rc = 0;
+ 
+   char delete_url[256]; 
+   char curl_err_str[CURL_ERROR_SIZE] = { 0 };
+   long http_status;
+   struct curl_slist* headers = NULL;
+   int rc = 0;
 
-  if (pass) {
-    curl_easy_setopt(curl, CURLOPT_USERPWD, pass);
-		curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-  }
+   snprintf(delete_url, 256, "%s/%s", DMS_API_URL, token);
 
-  curl_easy_setopt(curl, CURLOPT_URL, "url");
-  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+   if (pass) {
+      curl_easy_setopt(curl, CURLOPT_USERPWD, pass);
+      curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+   }
 
-  rc = curl_easy_perform(curl);
+   curl_easy_setopt(curl, CURLOPT_URL, delete_url);
+   curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+   curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1);
+   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 
-  return 0;
+   rc = curl_easy_perform(curl);
+
+   if (rc) {
+      curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status);
+      if (http_status == 404) {
+         fprintf(stderr, "HTTP request failed: %s\n", curl_err_str);
+      }
+   }
+
+   return rc;
 }

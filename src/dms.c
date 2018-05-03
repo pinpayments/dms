@@ -55,26 +55,27 @@ Options options;
 
 const char* load_token() {
 
-  static char token[256];
-  FILE* file; 
-  long size;
-  size_t rv;
+   static char token[256];
+   FILE* file; 
+   long size;
+   size_t rv;
 
-  if ((file = fopen(TOKEN_FILE, "r")) == NULL) {
-    return NULL;
-  }
+   if ((file = fopen(TOKEN_FILE, "r")) == NULL) {
+      return NULL;
+   }
 
-  fseek(file, 0 , SEEK_END);
-  size = ftell(file);
-  rewind(file);
-  rv = fread(token, 1, size, file);
-  if (rv != size) {
-    fclose(file);
-    /* error: could not read whole file */
-    return NULL;
-  }
-  fclose(file);
-  return token;
+   fseek(file, 0 , SEEK_END);
+   size = ftell(file);
+   rewind(file);
+   rv = fread(token, 1, size, file);
+   if (rv != size) {
+      fprintf(stderr, "could not read the whole file\n");
+      fclose(file);
+      return NULL;
+   }
+   fclose(file);
+   token[strcspn(token, "\n")] = '\0';
+   return token;
 }
 
 int dms_commission(CURL* curl) {

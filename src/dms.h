@@ -29,8 +29,8 @@
 #ifndef DMS_H
 #define DMS_H
 
-#define CONF_FILE   "/etc/dms.conf"
-#define TOKEN_FILE  "/var/lib/dms/token"
+#define CONF_FILE   "/tmp/dms.conf"
+#define TOKEN_FILE  "/tmp/token"
 
 #define DMS_API_URL "https://api.deadmanssnitch.com/v1/snitches"
 
