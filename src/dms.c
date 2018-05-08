@@ -86,6 +86,12 @@ int dms_commission(CURL* curl) {
    char req[JSON_BUF_LEN];
    const char* text;
 
+   /* make this call idempotent */
+   if (access(TOKEN_FILE, F_OK) == 0) {
+      /* file exists and is readable */
+      return 0;
+   }
+
    snprintf(req, JSON_BUF_LEN, SNITCH_CREATE_TEMPLATE, options.system_name);
 
    val = dms_create(curl, options.api_key, req);
