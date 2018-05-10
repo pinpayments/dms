@@ -36,6 +36,10 @@
 
 #include <dms.h>
 
+#define MAX_URL 256
+#define MAX_HEADER 64
+#define CURL_TIMEOUT_SECONDS 30
+
 struct download_buffer {
    void*   buf;
    size_t  len;
@@ -108,9 +112,9 @@ static int seek_data_cb(void *user_data, curl_off_t offset, int origin) {
    return 0; /* CURL_SEEKFUNC_OK */
 }
 
-json_t* dms_create(CURL* curl, const char* pass, const char* req) {
+json_t* dms_crud_create(CURL* curl, const char* pass, const char* req, const int* verbose) {
 
-   char hdr_len[64];
+   char hdr_len[MAX_HEADER];
    struct download_buffer download_data = { 0 };
    struct upload_buffer upload_data;
    struct curl_slist* headers = NULL;
@@ -121,7 +125,10 @@ json_t* dms_create(CURL* curl, const char* pass, const char* req) {
    long http_status;
    int rc = 0;
 
-   curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+   if (verbose) {
+      curl_easy_setopt(curl, CURLOPT_VERBOSE, (*verbose));
+   }
+
    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1);
    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, download_data_cb);
@@ -130,7 +137,8 @@ json_t* dms_create(CURL* curl, const char* pass, const char* req) {
    curl_easy_setopt(curl, CURLOPT_READDATA, &upload_data);
    curl_easy_setopt(curl, CURLOPT_SEEKFUNCTION, seek_data_cb);
    curl_easy_setopt(curl, CURLOPT_SEEKDATA, &upload_data);
-   curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30);
+   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, CURL_TIMEOUT_SECONDS);
+   curl_easy_setopt(curl, CURLOPT_TIMEOUT, CURL_TIMEOUT_SECONDS);
    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 
    if (pass) {
@@ -145,7 +153,7 @@ json_t* dms_create(CURL* curl, const char* pass, const char* req) {
    upload_data.len = strlen(req);
    upload_data.pos = 0;
 
-   snprintf(hdr_len, 64, "Content-Length: %lu", (unsigned long) upload_data.len);
+   snprintf(hdr_len, MAX_HEADER, "Content-Length: %lu", (unsigned long) upload_data.len);
 
    headers = curl_slist_append(headers, "Content-Type: application/json");
    headers = curl_slist_append(headers, hdr_len);
@@ -172,25 +180,44 @@ json_t* dms_create(CURL* curl, const char* pass, const char* req) {
    return val;
 }
 
-int dms_check_in(CURL* curl, const char* token) {
+int dms_crud_check_in(CURL* curl, const char* token, const int* verbose) {
 
-   char check_in_url[256];
+   char check_in_url[MAX_URL];
+   long http_status;
+   int rv = 0;
 
-   snprintf(check_in_url, 256, "https://nosnch.in/%s", token);
+   snprintf(check_in_url, MAX_URL, "https://nosnch.in/%s", token);
+
+   if (verbose) {
+      curl_easy_setopt(curl, CURLOPT_VERBOSE, (*verbose));
+   }
    curl_easy_setopt(curl, CURLOPT_URL, check_in_url);
+   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, CURL_TIMEOUT_SECONDS);
+   curl_easy_setopt(curl, CURLOPT_TIMEOUT, CURL_TIMEOUT_SECONDS);
 
-   return curl_easy_perform(curl);
+   rv = curl_easy_perform(curl);
+   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status);
+   if (http_status != 202) {
+      fprintf(stderr, "Unexpected HTTP status %ld\n", http_status);
+      return rv;
+   }
+
+   return rv;
 }
 
-int dms_delete(CURL* curl, const char* pass, const char* token) {
+int dms_crud_delete(CURL* curl, const char* pass, const char* token, const int* verbose) {
  
-   char delete_url[256]; 
+   char delete_url[MAX_URL]; 
    char curl_err_str[CURL_ERROR_SIZE] = { 0 };
    long http_status;
-   struct curl_slist* headers = NULL;
    int rc = 0;
 
-   snprintf(delete_url, 256, "%s/%s", DMS_API_URL, token);
+   snprintf(delete_url, MAX_URL, "%s/%s", DMS_API_URL, token);
+
+   if (verbose) {
+      curl_easy_setopt(curl, CURLOPT_VERBOSE, (*verbose));
+   }
 
    if (pass) {
       curl_easy_setopt(curl, CURLOPT_USERPWD, pass);
@@ -199,18 +226,62 @@ int dms_delete(CURL* curl, const char* pass, const char* token) {
 
    curl_easy_setopt(curl, CURLOPT_URL, delete_url);
    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
-   curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1);
    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, CURL_TIMEOUT_SECONDS);
+   curl_easy_setopt(curl, CURLOPT_TIMEOUT, CURL_TIMEOUT_SECONDS);
 
    rc = curl_easy_perform(curl);
-
+   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status);
    if (rc) {
-      curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status);
       if (http_status == 404) {
          fprintf(stderr, "HTTP request failed: %s\n", curl_err_str);
       }
    }
+
+   return rc;
+}
+
+int dms_crud_pause(CURL* curl, const char* pass, const char* token, const int* verbose) {
+
+   char pause_url[MAX_URL];
+   char hdr_len[MAX_HEADER];
+   char curl_err_str[CURL_ERROR_SIZE] = { 0 };
+   struct curl_slist* headers = NULL;
+   long http_status;
+   int rc = 0;
+
+   snprintf(pause_url, MAX_URL, "%s/%s/pause", DMS_API_URL, token);
+
+   if (verbose) {
+      curl_easy_setopt(curl, CURLOPT_VERBOSE, (*verbose));
+   }
+
+   if (pass) {
+      curl_easy_setopt(curl, CURLOPT_USERPWD, pass);
+      curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+   }
+
+   curl_easy_setopt(curl, CURLOPT_POST, 1);
+   curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "");
+   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1);
+   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, CURL_TIMEOUT_SECONDS);
+   curl_easy_setopt(curl, CURLOPT_TIMEOUT, CURL_TIMEOUT_SECONDS);
+   curl_easy_setopt(curl, CURLOPT_URL, pause_url);
+
+   snprintf(hdr_len, MAX_HEADER, "Content-Length: %lu", 0ul);
+
+   headers = curl_slist_append(headers, hdr_len);
+   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+   rc = curl_easy_perform(curl);
+   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status);
+   if (http_status != 204) {
+      fprintf(stderr, "Unexpected HTTP status %ld\n", http_status);
+   }
+
+   curl_slist_free_all(headers);
 
    return rc;
 }

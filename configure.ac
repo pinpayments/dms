@@ -1,7 +1,8 @@
-AC_INIT([dms], [1.0.0], [dev@pinpayments.com])
+AC_INIT([dms], [0.1.2], [dev+ubuntu@pinpayments.com], [], [https://github.com/pinpayments/dms])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_PROG_CC_C99
 AM_PROG_AS
+AC_CONFIG_HEADERS([src/config.h])
 AC_PROG_RANLIB
 AC_CONFIG_FILES([
   Makefile

@@ -39,43 +39,73 @@
 
 #include <readconf.h>
 #include <dms-crud.h>
+#include <config.h>
 
 #define unlikely(x)    __builtin_expect(!!(x), 0)
 
 #define SNITCH_CREATE_TEMPLATE \
   "{\"name\":\"%s daily ClamAV\", \"interval\":\"daily\", \"tags\":[\"production\", \"anti-virus\"]}"
 
+#define MAX_TOKEN 256
+
 typedef enum {
   COMMISSION,
   DECOMMISSION,
-  REPORT
+  REPORT,
+  PAUSE
 } Action;
 
 Options options;
 
-const char* load_token() {
+const char* load_token() {;
 
-   static char token[256];
+   static char token[MAX_TOKEN];
    FILE* file; 
    long size;
    size_t rv;
 
    if ((file = fopen(TOKEN_FILE, "r")) == NULL) {
+      fprintf(stderr, "failed to load token\n");
       return NULL;
    }
 
    fseek(file, 0 , SEEK_END);
    size = ftell(file);
    rewind(file);
+   if (size > MAX_TOKEN) {
+      fprintf(stderr, "token is larger than supported size\n");
+      goto error;
+   } 
    rv = fread(token, 1, size, file);
    if (rv != size) {
       fprintf(stderr, "could not read the whole file\n");
-      fclose(file);
-      return NULL;
+      goto error;
    }
    fclose(file);
    token[strcspn(token, "\n")] = '\0';
    return token;
+error:
+   fclose(file);
+   return NULL;
+}
+
+void print_version() {
+   printf(PACKAGE_STRING " " PACKAGE_URL "\n");
+}
+
+void print_usage() {
+   static char const usage[] = "\
+Usage: " PACKAGE_NAME " [OPTIONS]\n\
+Options:\n\
+   -c    commission a snitch for this system\n\
+   -d    decommission the snitch\n\
+   -r    report on this snitch\n\
+   -p    pause the snitch\n\
+   -v    display version information and exit\n\
+   -h    display this help text and exit\n\
+";
+
+   printf(usage);
 }
 
 int dms_commission(CURL* curl) {
@@ -85,6 +115,7 @@ int dms_commission(CURL* curl) {
    json_t* token;
    char req[JSON_BUF_LEN];
    const char* text;
+   int verbose = 1;
 
    /* make this call idempotent */
    if (access(TOKEN_FILE, F_OK) == 0) {
@@ -94,7 +125,7 @@ int dms_commission(CURL* curl) {
 
    snprintf(req, JSON_BUF_LEN, SNITCH_CREATE_TEMPLATE, options.system_name);
 
-   val = dms_create(curl, options.api_key, req);
+   val = dms_crud_create(curl, options.api_key, req, &verbose);
 
    if ((file = fopen(TOKEN_FILE, "wb")) == NULL) {
       fprintf(stderr, "could not open token file\n");    
@@ -129,13 +160,13 @@ int dms_decommission(CURL* curl) {
    long size;
    size_t rv;
    const char* token;
+   int verbose = 1;
 
    if ((token = load_token()) == NULL) {
-      fprintf(stderr, "failed to load token\n");
       return 1;
    }
 
-   if (dms_delete(curl, options.api_key, token) != 0) {
+   if (dms_crud_delete(curl, options.api_key, token, &verbose) != 0) {
       fprintf(stderr, "failed to delete\n");
       return 1;
    }
@@ -151,14 +182,31 @@ int dms_decommission(CURL* curl) {
 int dms_report(CURL* curl) { 
 
    const char* token; 
+   int verbose = 1;
 
    if ((token = load_token()) == NULL) { 
-      fprintf(stderr, "failed to load token\n");
       return 1;
    }
 
-   if (!dms_check_in(curl, token)) {
+   if (dms_crud_check_in(curl, token, &verbose)) {
       fprintf(stderr, "failed to check-in\n");
+      return 1;
+   }
+
+   return 0;
+}
+
+int dms_pause(CURL* curl) {
+
+   const char* token;
+   int verbose = 1;
+
+   if ((token = load_token()) == NULL) {
+      return 1;
+   }
+
+   if (dms_crud_pause(curl, options.api_key, token, &verbose)) {
+      fprintf(stderr, "failed to pause\n");
       return 1;
    }
 
@@ -172,7 +220,7 @@ int main(int argc, char* argv[]) {
    int action = REPORT;
    int rv; 
 
-   while ((c = getopt(argc, argv, "cd")) != -1) {
+   while ((c = getopt(argc, argv, "cdrpvh")) != -1) {
       switch (c) {
       case 'c':
          action = COMMISSION;
@@ -180,9 +228,18 @@ int main(int argc, char* argv[]) {
       case 'd':
          action = DECOMMISSION; 
          break;
-      default:
+      case 'r': 
          action = REPORT;
          break;
+      case 'p':
+         action = PAUSE;
+         break;
+      case 'v':
+         print_version();
+         return 0;
+      default:
+         print_usage();
+         return 0; 
       }
    }
 
@@ -211,6 +268,9 @@ int main(int argc, char* argv[]) {
     break;
   case REPORT:
     rv = dms_report(curl);
+    break;
+  case PAUSE:
+    rv = dms_pause(curl);
     break;
   }
 

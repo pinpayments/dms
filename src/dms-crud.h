@@ -26,9 +26,15 @@
 //    misrepresented as being the original software.
 // 3. This notice may not be removed or altered from any source distribution.
 
+#ifndef DMS_CRUD_H
+#define DMS_CRUD_H
+
 #include <curl/curl.h>
 #include <jansson.h>
 
-json_t*   dms_create(CURL* curl, const char* pass, const char* req);
-int       dms_delete(CURL* curl, const char* pass, const char* token);
-int       dms_check_in(CURL* curl, const char* token);
+json_t*  dms_crud_create(CURL* curl, const char* pass, const char* req, const int* verbose);
+int      dms_crud_delete(CURL* curl, const char* pass, const char* token, const int* verbose);
+int      dms_crud_check_in(CURL* curl, const char* token, const int* verbose);
+int      dms_crud_pause(CURL* curl, const char* pass, const char* token, const int* verbose);
+
+#endif // DMS_CRUD_H
