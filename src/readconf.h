@@ -30,8 +30,9 @@
 #define READCONF_H
 
 typedef struct {
-  char* api_key;
-  char* system_name;
+   char* api_key;
+   char* system_name;
+   int verbose;
 } Options;
 
 void  initialize_options(Options* options);

@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
+#include <errno.h>
 
 #include <curl/curl.h>
 #include <jansson.h>
@@ -98,9 +99,9 @@ void print_usage() {
 Usage: " PACKAGE_NAME " [OPTIONS]\n\
 Options:\n\
    -c    commission a snitch for this system\n\
-   -d    decommission the snitch\n\
+   -d    decommission snitch\n\
    -r    report on this snitch\n\
-   -p    pause the snitch\n\
+   -p    pause snitch\n\
    -v    display version information and exit\n\
    -h    display this help text and exit\n\
 ";
@@ -115,7 +116,6 @@ int dms_commission(CURL* curl) {
    json_t* token;
    char req[JSON_BUF_LEN];
    const char* text;
-   int verbose = 1;
 
    /* make this call idempotent */
    if (access(TOKEN_FILE, F_OK) == 0) {
@@ -125,7 +125,7 @@ int dms_commission(CURL* curl) {
 
    snprintf(req, JSON_BUF_LEN, SNITCH_CREATE_TEMPLATE, options.system_name);
 
-   val = dms_crud_create(curl, options.api_key, req, &verbose);
+   val = dms_crud_create(curl, options.api_key, req, &options.verbose);
 
    if ((file = fopen(TOKEN_FILE, "wb")) == NULL) {
       fprintf(stderr, "could not open token file\n");    
@@ -160,13 +160,12 @@ int dms_decommission(CURL* curl) {
    long size;
    size_t rv;
    const char* token;
-   int verbose = 1;
 
    if ((token = load_token()) == NULL) {
       return 1;
    }
 
-   if (dms_crud_delete(curl, options.api_key, token, &verbose) != 0) {
+   if (dms_crud_delete(curl, options.api_key, token, &options.verbose) != 0) {
       fprintf(stderr, "failed to delete\n");
       return 1;
    }
@@ -182,13 +181,12 @@ int dms_decommission(CURL* curl) {
 int dms_report(CURL* curl) { 
 
    const char* token; 
-   int verbose = 1;
 
    if ((token = load_token()) == NULL) { 
       return 1;
    }
 
-   if (dms_crud_check_in(curl, token, &verbose)) {
+   if (dms_crud_check_in(curl, token, &options.verbose)) {
       fprintf(stderr, "failed to check-in\n");
       return 1;
    }
@@ -199,13 +197,12 @@ int dms_report(CURL* curl) {
 int dms_pause(CURL* curl) {
 
    const char* token;
-   int verbose = 1;
 
    if ((token = load_token()) == NULL) {
       return 1;
    }
 
-   if (dms_crud_pause(curl, options.api_key, token, &verbose)) {
+   if (dms_crud_pause(curl, options.api_key, token, &options.verbose)) {
       fprintf(stderr, "failed to pause\n");
       return 1;
    }
@@ -216,7 +213,8 @@ int dms_pause(CURL* curl) {
 int main(int argc, char* argv[]) {
 
    int c;
-   CURL *curl;
+   CURL* curl;
+   char* env;
    int action = REPORT;
    int rv; 
 
@@ -250,7 +248,18 @@ int main(int argc, char* argv[]) {
 
    initialize_options(&options);
 
-   read_config_file(CONF_FILE, &options);
+   env = getenv("VERBOSE");
+
+   if (env) {
+      options.verbose = (int)strtol(env, (char **)NULL, 10);
+      if (options.verbose == 0 && errno == EINVAL) {
+         options.verbose = 1;
+      }
+   }
+
+   if (read_config_file(CONF_FILE, &options)) {
+      return 1;
+   }
 
    curl = curl_easy_init();
 

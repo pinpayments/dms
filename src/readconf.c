@@ -40,9 +40,9 @@
 #define QUOTE	"\""
 
 typedef enum {
-  OPCODE_API_KEY,
-  OPCODE_SYSTEM_NAME,
-  OPCODE_BAD
+   OPCODE_API_KEY,
+   OPCODE_SYSTEM_NAME,
+   OPCODE_BAD
 } OPCODE_TYPE;
 
 static void lowercase(char* s);
@@ -50,35 +50,36 @@ static char* strdelim(char** s);
 static int process_config_line(Options* options, char* line);
 
 void initialize_options(Options* options) {
-  memset(options, 'X', sizeof(*options));
-  options->api_key = NULL;
-  options->system_name = NULL;
+   memset(options, 'X', sizeof(*options));
+   options->api_key = NULL;
+   options->system_name = NULL;
+   options->verbose = 0;
 }
 
 void free_options(Options* options) {
-  if (options->api_key) 
-    free(options->api_key);
-  if (options->system_name) 
-    free(options->system_name);
+   if (options->api_key) 
+      free(options->api_key);
+   if (options->system_name) 
+      free(options->system_name);
 }
 
 int read_config_file(const char* filename, Options* options) {
   
-  FILE* f;
-  char line[1024];
+   FILE* f;
+   char line[1024];
 
-  if ((f = fopen(filename, "r")) == NULL) 
-    return 0;
+   if ((f = fopen(filename, "r")) == NULL) {
+      fprintf(stderr, "%s is missing or unreadable\n", filename);
+      return 1;
+   }
 
   while (fgets(line, sizeof(line), f)) {
     if (strlen(line) == sizeof(line) - 1)
-      printf("line too long\n");
+      fprintf(stderr, "line too long\n");
     if (process_config_line(options, line) != 0) 
-      printf("bad configuration\n");
+      fprintf(stderr, "bad configuration\n");
   }
-  
   fclose(f);
-
   return 0;
 }
 
