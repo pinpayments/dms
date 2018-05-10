@@ -112,6 +112,13 @@ static int seek_data_cb(void *user_data, curl_off_t offset, int origin) {
    return 0; /* CURL_SEEKFUNC_OK */
 }
 
+static void download_buffer_free(struct download_buffer* db) {
+   if (db && db->len) {
+      free(db->buf);
+      memset(db, 0, sizeof(*db));
+   }
+}
+
 json_t* dms_crud_create(CURL* curl, const char* pass, const char* req, const int* verbose) {
 
    char hdr_len[MAX_HEADER];
@@ -170,12 +177,13 @@ json_t* dms_crud_create(CURL* curl, const char* pass, const char* req, const int
    }
 
    if (!download_data.buf) { 
-    fprintf(stderr, "No data received from DMS\n");
+      fprintf(stderr, "No data received from DMS\n");
    }
 
    val = json_loads(download_data.buf, 0, &json_err);
 
    curl_slist_free_all(headers);
+   download_buffer_free(&download_data);
 
    return val;
 }
