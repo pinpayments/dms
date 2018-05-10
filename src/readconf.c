@@ -57,9 +57,9 @@ void initialize_options(Options* options) {
 }
 
 void free_options(Options* options) {
-   if (options->api_key) 
+   if (options->api_key)
       free(options->api_key);
-   if (options->system_name) 
+   if (options->system_name)
       free(options->system_name);
 }
 
