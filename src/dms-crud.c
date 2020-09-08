@@ -160,7 +160,7 @@ json_t* dms_crud_create(CURL* curl, const char* pass, const char* req, const int
    upload_data.len = strlen(req);
    upload_data.pos = 0;
 
-   snprintf(hdr_len, MAX_HEADER, "Content-Length: %lu", (unsigned long) upload_data.len);
+   curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, upload_data.len);
 
    headers = curl_slist_append(headers, "Content-Type: application/json");
    headers = curl_slist_append(headers, hdr_len);
@@ -253,9 +253,7 @@ int dms_crud_delete(CURL* curl, const char* pass, const char* token, const int* 
 int dms_crud_pause(CURL* curl, const char* pass, const char* token, const int* verbose) {
 
    char pause_url[MAX_URL];
-   char hdr_len[MAX_HEADER];
    char curl_err_str[CURL_ERROR_SIZE] = { 0 };
-   struct curl_slist* headers = NULL;
    long http_status;
    int rc = 0;
 
@@ -278,18 +276,13 @@ int dms_crud_pause(CURL* curl, const char* pass, const char* token, const int* v
    curl_easy_setopt(curl, CURLOPT_TIMEOUT, CURL_TIMEOUT_SECONDS);
    curl_easy_setopt(curl, CURLOPT_URL, pause_url);
 
-   snprintf(hdr_len, MAX_HEADER, "Content-Length: %lu", 0ul);
-
-   headers = curl_slist_append(headers, hdr_len);
-   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+   curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0L);
 
    rc = curl_easy_perform(curl);
    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status);
    if (http_status != 204) {
       fprintf(stderr, "Unexpected HTTP status %ld\n", http_status);
    }
-
-   curl_slist_free_all(headers);
 
    return rc;
 }

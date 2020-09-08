@@ -1,4 +1,4 @@
-AC_INIT([dms], [0.1.4], [dev+ubuntu@pinpayments.com], [], [https://github.com/pinpayments/dms])
+AC_INIT([dms], [0.1.5], [dev+ubuntu@pinpayments.com], [], [https://github.com/pinpayments/dms])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_PROG_CC_C99
 AM_PROG_AS

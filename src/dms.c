@@ -58,6 +58,8 @@ typedef enum {
 
 Options options;
 
+char token_file[PATH_MAX];
+
 const char* load_token() {;
 
    static char token[MAX_TOKEN];
@@ -65,7 +67,7 @@ const char* load_token() {;
    long size;
    size_t rv;
 
-   if ((file = fopen(TOKEN_FILE, "r")) == NULL) {
+   if ((file = fopen(token_file, "r")) == NULL) {
       fprintf(stderr, "failed to load token\n");
       return NULL;
    }
@@ -118,7 +120,7 @@ int dms_commission(CURL* curl) {
    const char* text;
 
    /* make this call idempotent */
-   if (access(TOKEN_FILE, F_OK) == 0) {
+   if (access(token_file, F_OK) == 0) {
       /* file exists and is readable */
       return 0;
    }
@@ -127,7 +129,7 @@ int dms_commission(CURL* curl) {
 
    val = dms_crud_create(curl, options.api_key, req, &options.verbose);
 
-   if ((file = fopen(TOKEN_FILE, "wb")) == NULL) {
+   if ((file = fopen(token_file, "wb")) == NULL) {
       fprintf(stderr, "could not open token file\n");    
       return 1;
    }
@@ -170,7 +172,7 @@ int dms_decommission(CURL* curl) {
       return 1;
    }
 
-   if (remove(TOKEN_FILE)) { 
+   if (remove(token_file)) {
       fprintf(stderr, "failed to remove token file\n");
       return 1;
    }
@@ -216,6 +218,7 @@ int main(int argc, char* argv[]) {
    CURL* curl;
    char* env;
    int action = REPORT;
+   char conf_file[PATH_MAX];
    int rv; 
 
    while ((c = getopt(argc, argv, "cdrpvh")) != -1) {
@@ -249,7 +252,6 @@ int main(int argc, char* argv[]) {
    initialize_options(&options);
 
    env = getenv("VERBOSE");
-
    if (env) {
       options.verbose = (int)strtol(env, (char **)NULL, 10);
       if (options.verbose == 0 && errno == EINVAL) {
@@ -257,10 +259,23 @@ int main(int argc, char* argv[]) {
       }
    }
 
-   if (read_config_file(CONF_FILE, &options)) {
-      return 1;
+   env = getenv("CONFIG");
+   if (env) {
+      strncpy(conf_file, env, PATH_MAX);
+   } else {
+      strncpy(conf_file, CONF_FILE, PATH_MAX);
    }
 
+   env = getenv("TOKEN");
+   if (env) {
+      strncpy(token_file, env, PATH_MAX);
+   } else {
+      strncpy(token_file, TOKEN_FILE, PATH_MAX);
+   }
+
+   if (read_config_file(conf_file, &options)) {
+      return 1;
+   }
    curl = curl_easy_init();
 
    if (unlikely(!curl)) {
